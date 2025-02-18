@@ -6,6 +6,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from io import BytesIO
+import re
 
 # Función para limpiar Markdown
 def clean_markdown(text):
@@ -39,16 +40,16 @@ def process_dialogues_and_lists(text):
     return '\n\n'.join(processed_lines)
 
 # Función para generar un capítulo usando OpenRouter AI
-def generate_chapter(api_key, title, plot, audience, chapter_number, language, is_intro=False, is_conclusion=False):
+def generate_chapter(api_key, title, plot, audience, genre, chapter_number, language, is_intro=False, is_conclusion=False):
     url = "https://openrouter.ai/api/v1/chat/completions"
     
     # Construir el mensaje según si es introducción, capítulo o conclusión
     if is_intro:
-        message_content = f"Escribe una introducción detallada para la novela '{title}' con la trama '{plot}' dirigida a {audience}."
+        message_content = f"Escribe una introducción detallada para la novela '{title}' con la trama '{plot}', dirigida a {audience}. El género es {genre}."
     elif is_conclusion:
-        message_content = f"Escribe conclusiones exhaustivas para la novela '{title}' con la trama '{plot}' dirigida a {audience}."
+        message_content = f"Escribe conclusiones exhaustivas para la novela '{title}' con la trama '{plot}', dirigida a {audience}. El género es {genre}."
     else:
-        message_content = f"Escribe el capítulo {chapter_number} para la novela '{title}' con la trama '{plot}' dirigido a {audience}."
+        message_content = f"Escribe el capítulo {chapter_number} para la novela '{title}' con la trama '{plot}', dirigido a {audience}. El género es {genre}."
     
     headers = {
         "Content-Type": "application/json",
@@ -175,6 +176,8 @@ st.title("📚 Novel Generator")
 title = st.text_input("📒 Título de la novela:")
 plot = st.text_area("📖 Trama general:", placeholder="Describe brevemente la trama de la novela.")
 audience = st.text_input("🎯 Audiencia objetivo:")
+genres = ["Romance", "Ciencia Ficción", "Fantasía", "Misterio", "Thriller", "Drama", "Comedia", "Aventura", "Histórico", "Cyberpunk", "Steampunk", "Horror"]
+selected_genre = st.selectbox("🎭 Género/Subgénero:", genres)
 num_chapters = st.slider("🔢 Número de Capítulos", min_value=1, max_value=50, value=10)
 author_name = st.text_input("🖋️ Nombre del Autor (opcional):")
 author_bio = st.text_area("👤 Perfil del Autor (opcional):", placeholder="Descripción profesional breve o biografía.")
@@ -201,7 +204,7 @@ if st.button("🚀 Generar Novela"):
 
     # Generar introducción
     st.write("⏳ Generando introducción...")
-    intro_content = generate_chapter(api_key, title, plot, audience, 0, selected_language.lower(), is_intro=True)
+    intro_content = generate_chapter(api_key, title, plot, audience, selected_genre, 0, selected_language.lower(), is_intro=True)
     chapters.append(intro_content)
     word_count = len(intro_content.split())
     with st.expander(f"🌟 Introducción ({word_count} palabras)"):
@@ -211,7 +214,7 @@ if st.button("🚀 Generar Novela"):
     progress_bar = st.progress(0)
     for i in range(1, num_chapters + 1):
         st.write(f"⏳ Generando capítulo {i}...")
-        chapter_content = generate_chapter(api_key, title, plot, audience, i, selected_language.lower())
+        chapter_content = generate_chapter(api_key, title, plot, audience, selected_genre, i, selected_language.lower())
         word_count = len(chapter_content.split())
         chapters.append(chapter_content)
         with st.expander(f"📖 Capítulo {i} ({word_count} palabras)"):
@@ -220,7 +223,7 @@ if st.button("🚀 Generar Novela"):
 
     # Generar conclusiones
     st.write("⏳ Generando conclusiones...")
-    conclusion_content = generate_chapter(api_key, title, plot, audience, 0, selected_language.lower(), is_conclusion=True)
+    conclusion_content = generate_chapter(api_key, title, plot, audience, selected_genre, 0, selected_language.lower(), is_conclusion=True)
     word_count = len(conclusion_content.split())
     chapters.append(conclusion_content)
     with st.expander(f"🔚 Conclusiones ({word_count} palabras)"):
