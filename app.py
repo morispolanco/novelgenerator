@@ -39,6 +39,20 @@ def process_dialogues_and_lists(text):
 
     return '\n\n'.join(processed_lines)
 
+# Función para aplicar reglas de capitalización según el idioma
+def format_title(title, language):
+    """
+    Formatea el título según las reglas gramaticales del idioma.
+    - Español: Solo mayúscula inicial en la primera palabra y nombres propios.
+    - Otros idiomas: Mayúscula inicial en cada palabra.
+    """
+    if language.lower() == "spanish":
+        words = title.split()
+        formatted_words = [words[0].capitalize()] + [word.lower() if word.islower() else word for word in words[1:]]
+        return " ".join(formatted_words)
+    else:
+        return title.title()
+
 # Función para generar un capítulo usando OpenRouter AI
 def generate_chapter(api_key, title, plot, audience, genre, chapter_number, language, is_intro=False, is_conclusion=False):
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -70,8 +84,11 @@ def generate_chapter(api_key, title, plot, audience, genre, chapter_number, lang
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
         content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "Error generating the chapter.")
-    except requests.RequestException as e:
-        st.error(f"Error al generar el capítulo {chapter_number}: {str(e)}")
+    except requests.exceptions.HTTPError as e:
+        st.error(f"Error HTTP: {e.response.status_code} - {e.response.text}")
+        return "Error al generar el capítulo."
+    except Exception as e:
+        st.error(f"Error desconocido: {str(e)}")
         return "Error al generar el capítulo."
     
     # Procesar diálogos y listas
@@ -113,9 +130,10 @@ def create_word_document(chapters, title, author_name, author_bio, language):
     section.right_margin = Inches(0.8)
 
     # Añadir y formatear el título
+    formatted_title = format_title(title, language)
     title_paragraph = doc.add_paragraph()
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title_paragraph.add_run(title)
+    title_run = title_paragraph.add_run(formatted_title)
     title_run.bold = True
     title_run.font.size = Pt(14)
     title_run.font.name = "Times New Roman"
@@ -141,7 +159,8 @@ def create_word_document(chapters, title, author_name, author_bio, language):
     # Añadir capítulos
     for i, chapter in enumerate(chapters, 1):
         chapter_title_text = f"Chapter {i}" if language.lower() != "spanish" else f"Capítulo {i}"
-        chapter_title = doc.add_paragraph(chapter_title_text)
+        formatted_chapter_title = format_title(chapter_title_text, language)
+        chapter_title = doc.add_paragraph(formatted_chapter_title)
         chapter_title.style = "Heading 1"
         chapter_title.runs[0].font.size = Pt(12)
         chapter_title.runs[0].font.name = "Times New Roman"
