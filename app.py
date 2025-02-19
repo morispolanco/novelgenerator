@@ -53,9 +53,9 @@ def format_title(title, language):
     else:
         return title.title()
 
-# Función para generar un capítulo usando OpenRouter
+# Función para generar un capítulo usando Google Gemini
 def generate_chapter(api_key, topic, audience, chapter_number, language, table_of_contents="", specific_instructions="", is_intro=False, is_conclusion=False):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     
     # Construir el mensaje con la tabla de contenido e instrucciones específicas
     if is_intro:
@@ -72,24 +72,19 @@ def generate_chapter(api_key, topic, audience, chapter_number, language, table_o
         message_content += f" {specific_instructions}"
     
     data = {
-        "model": "sophosympatheia/rogue-rose-103b-v0.2:free",  # Modelo de OpenRouter
-        "messages": [
-            {
-                "role": "user",
-                "content": message_content
-            }
-        ]
-    }
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
+        "contents": [{"role": "user", "parts": [{"text": message_content}]}],
+        "generationConfig": {
+            "temperature": 0.7,  # Ajuste para más coherencia y relevancia
+            "topK": 40,
+            "topP": 0.95,
+            "responseMimeType": "text/plain"
+        }
     }
     
     try:
-        response = requests.post(url, json=data, headers=headers)
+        response = requests.post(url, json=data)
         response.raise_for_status()
-        content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "Error generating the chapter.")
+        content = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating the chapter.")
     except requests.RequestException as e:
         st.error(f"Error al generar el capítulo {chapter_number}: {str(e)}")
         return "Error al generar el capítulo."
@@ -218,10 +213,10 @@ st.sidebar.markdown("""
 """)
 
 # Validación de claves secretas
-if "OPENROUTER_API_KEY" not in st.secrets:
-    st.error("Por favor, configura la clave API de OpenRouter en los secretos de Streamlit.")
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("Por favor, configura la clave API en los secretos de Streamlit.")
     st.stop()
-api_key = st.secrets["OPENROUTER_API_KEY"]
+api_key = st.secrets["GOOGLE_API_KEY"]
 
 # Entradas del usuario
 topic = st.text_input("📒 Tema del libro:")
