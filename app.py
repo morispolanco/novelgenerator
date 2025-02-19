@@ -149,7 +149,20 @@ st.title("Generador de Novelas")
 
 # Entradas del usuario
 title = st.text_input("Título de la novela:")
-genre = st.selectbox("Género:", ["Ciencia Ficción", "Fantasía", "Romance", "Misterio", "Drama"])
+genre = st.selectbox("Género:", [
+    "Ciencia Ficción",
+    "Fantasía",
+    "Romance",
+    "Misterio",
+    "Drama",
+    "Terror",
+    "Aventura",
+    "Histórico",
+    "Comedia",
+    "Thriller",
+    "Distopía",
+    "Realismo Mágico"
+])
 audience = st.selectbox("Audiencia:", ["Niños", "Adolescentes", "Adultos"])
 num_chapters = st.number_input("Número de capítulos:", min_value=1, max_value=50, value=5)
 
