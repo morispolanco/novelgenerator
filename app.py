@@ -16,7 +16,7 @@ def generate_novel_content(prompt):
         "Authorization": f"Bearer {api_key}"
     }
     data = {
-        "model": "qwen/qwen-turbo",  # Cambio al modelo Qwen Turbo
+        "model": "qwen/qwen-turbo",  # Modelo Qwen Turbo
         "messages": [
             {
                 "role": "user",
@@ -192,22 +192,27 @@ if st.button("Generar Novela"):
                 f"El nudo principal es: {nudo}. "
                 f"El desenlace será: {desenlace}. "
                 f"{instructions if instructions else ''} "
-                f"Asegúrate de que el capítulo tenga una longitud adecuada y continúe la historia de forma coherente."
+                f"Asegúrate de que el capítulo tenga una longitud adecuada y continúe la historia de forma coherente. "
+                f"El capítulo debe tener al menos 1000 palabras."
             )
             
             # Generar el contenido del capítulo
-            chapter_content = generate_novel_content(prompt)
-            if chapter_content:
-                # Reemplazar comillas por rayas si el idioma es español
-                chapter_content = replace_quotes_with_dashes(chapter_content, language)
-                
-                word_count = count_words(chapter_content)
-                total_word_count += word_count
-                novel_content.append((f"Capítulo {chapter}", chapter_content, word_count))
-                
-                # Mostrar el capítulo generado en tiempo real
-                with chapter_container.expander(f"Capítulo {chapter} ({word_count} palabras)"):
-                    st.write(chapter_content)
+            chapter_content = ""
+            while count_words(chapter_content) < 1000:  # Verificar que el capítulo tenga más de 1000 palabras
+                new_content = generate_novel_content(prompt)
+                if new_content:
+                    chapter_content += " " + new_content.strip()
+            
+            # Reemplazar comillas por rayas si el idioma es español
+            chapter_content = replace_quotes_with_dashes(chapter_content, language)
+            
+            word_count = count_words(chapter_content)
+            total_word_count += word_count
+            novel_content.append((f"Capítulo {chapter}", chapter_content, word_count))
+            
+            # Mostrar el capítulo generado en tiempo real
+            with chapter_container.expander(f"Capítulo {chapter} ({word_count} palabras)"):
+                st.write(chapter_content)
             
             # Actualizar la barra de progreso
             progress = chapter / num_chapters
