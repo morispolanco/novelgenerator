@@ -168,6 +168,9 @@ if st.button("Generar Novela"):
         progress_bar = st.progress(0)
         status_text = st.empty()  # Para mostrar el estado actual
         
+        # Contenedor para mostrar los capítulos generados
+        chapter_container = st.container()
+        
         for chapter in range(1, int(num_chapters) + 1):
             status_text.text(f"Generando capítulo {chapter} de {num_chapters}...")
             
@@ -188,18 +191,16 @@ if st.button("Generar Novela"):
                 word_count = count_words(chapter_content)
                 total_word_count += word_count
                 novel_content.append((f"Capítulo {chapter}", chapter_content, word_count))
+                
+                # Mostrar el capítulo generado en tiempo real
+                with chapter_container.expander(f"Capítulo {chapter} ({word_count} palabras)"):
+                    st.write(chapter_content)
             
             # Actualizar la barra de progreso
             progress = chapter / num_chapters
             progress_bar.progress(progress)
         
         status_text.text("¡Novela generada con éxito!")
-        
-        # Mostrar la novela completa con menús retractables
-        st.subheader("Novela Completa")
-        for chapter_title, content, word_count in novel_content:
-            with st.expander(f"{chapter_title} ({word_count} palabras)"):
-                st.write(content)
         
         # Mostrar el total de palabras
         st.write(f"**Total de palabras en la novela:** {total_word_count}")
