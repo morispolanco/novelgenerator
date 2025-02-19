@@ -16,7 +16,7 @@ def generate_novel_content(prompt):
         "Authorization": f"Bearer {api_key}"
     }
     data = {
-        "model": "qwen/qwen-turbo",
+        "model": "sophosympatheia/rogue-rose-103b-v0.2:free",
         "messages": [
             {
                 "role": "user",
