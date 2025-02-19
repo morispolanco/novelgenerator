@@ -3,96 +3,38 @@ import requests
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from io import BytesIO
-import re
 
-# Función para limpiar Markdown
-def clean_markdown(text):
-    """Elimina marcas de Markdown del texto."""
-    text = re.sub(r'[#*_`]', '', text)  # Eliminar caracteres especiales de Markdown
-    return text.strip()
-
-# Función para procesar listas y diálogos, reemplazando guiones por rayas
-def process_dialogues_and_lists(text):
-    """
-    Procesa el texto para:
-    1. Reemplazar guiones ('-') al inicio de las listas o diálogos por rayas ('—').
-    2. Asegurar que después de las listas haya un salto de párrafo.
-    """
-    lines = text.split('\n')  # Divide el texto en líneas
-    processed_lines = []
-    in_list = False  # Indicador para saber si estamos dentro de una lista o diálogo
-
-    for line in lines:
-        stripped_line = line.strip()
-        if stripped_line.startswith('-'):  # Detectar líneas que comienzan con un guion
-            processed_line = stripped_line.replace('-', '—', 1)
-            processed_lines.append(processed_line)
-            in_list = True
-        else:
-            if in_list:
-                processed_lines.append("")  # Salto de párrafo
-                in_list = False
-            processed_lines.append(stripped_line)
-
-    return '\n\n'.join(processed_lines)
-
-# Función para aplicar reglas de capitalización según el idioma
-def format_title(title, language):
-    """
-    Formatea el título según las reglas gramaticales del idioma.
-    - Español: Solo mayúscula inicial en la primera palabra y nombres propios.
-    - Otros idiomas: Mayúscula inicial en cada palabra.
-    """
-    if language.lower() == "spanish":
-        words = title.split()
-        formatted_words = [words[0].capitalize()] + [word.lower() if word.islower() else word for word in words[1:]]
-        return " ".join(formatted_words)
-    else:
-        return title.title()
-
-# Función para generar un capítulo usando Google Gemini
-def generate_chapter(api_key, topic, audience, chapter_number, language, table_of_contents="", specific_instructions="", is_intro=False, is_conclusion=False):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-    
-    # Construir el mensaje con la tabla de contenido e instrucciones específicas
-    if is_intro:
-        message_content = f"Escribe una introducción detallada sobre {topic} dirigida a {audience}."
-    elif is_conclusion:
-        message_content = f"Escribe conclusiones exhaustivas sobre {topic} dirigidas a {audience}."
-    else:
-        message_content = f"Escribe el capítulo {chapter_number} sobre {topic} dirigido a {audience}."
-    
-    if table_of_contents:
-        message_content += f" Sigue esta estructura: {table_of_contents}"
-    
-    if specific_instructions:
-        message_content += f" {specific_instructions}"
-    
-    data = {
-        "contents": [{"role": "user", "parts": [{"text": message_content}]}],
-        "generationConfig": {
-            "temperature": 0.7,  # Ajuste para más coherencia y relevancia
-            "topK": 40,
-            "topP": 0.95,
-            "responseMimeType": "text/plain"
-        }
+# Función para llamar a la API de OpenRouter
+def generate_novel_content(prompt):
+    api_key = st.secrets["OPENROUTER_API_KEY"]
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
     }
-    
-    try:
-        response = requests.post(url, json=data)
-        response.raise_for_status()
-        content = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating the chapter.")
-    except requests.RequestException as e:
-        st.error(f"Error al generar el capítulo {chapter_number}: {str(e)}")
-        return "Error al generar el capítulo."
-    
-    # Procesar diálogos y listas
-    processed_content = process_dialogues_and_lists(content)
-    
-    return clean_markdown(processed_content)
+    data = {
+        "model": "sophosympatheia/rogue-rose-103b-v0.2:free",
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    }
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json()["choices"][0]["message"]["content"]
+    else:
+        st.error(f"Error al generar el contenido: {response.status_code}")
+        return None
+
+# Función para contar el número de palabras en un texto
+def count_words(text):
+    words = text.split()
+    return len(words)
 
 # Función para agregar numeración de páginas al documento Word
 def add_page_numbers(doc):
@@ -113,7 +55,7 @@ def add_page_numbers(doc):
         run._r.append(fldChar2)
 
 # Función para crear un documento Word con formato específico
-def create_word_document(chapters, title, author_name, author_bio, language):
+def create_word_document(chapters, title, author_name="", author_bio="", language="spanish"):
     doc = Document()
 
     # Configurar el tamaño de página (5.5 x 8.5 pulgadas)
@@ -176,112 +118,87 @@ def create_word_document(chapters, title, author_name, author_bio, language):
 
         doc.add_page_break()
 
+    # Agregar numeración de páginas
     add_page_numbers(doc)
 
+    # Guardar el documento en un objeto de bytes
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
 
-# Configuración de Streamlit
-st.set_page_config(page_title="Automatic Book Generator", page_icon="📚")
+# Función para formatear el título según el idioma
+def format_title(title, language):
+    if language.lower() == "spanish":
+        return title.upper()
+    else:
+        return title.title()
 
-# Título con ícono
-st.title("📚 Automatic Book Generator")
-
-# Barra lateral con instrucciones y anuncio
-st.sidebar.header("📖 ¿Cómo funciona esta aplicación?")
-st.sidebar.markdown("""
-Esta aplicación genera automáticamente libros en formato `.docx` basados en un tema y audiencia objetivo. 
-Los libros pueden ser **ficción** o **no-ficción**, dependiendo de tu entrada.
-
-**Pasos para usarla:**
-1. Introduce el tema del libro.
-2. Especifica la audiencia objetivo.
-3. Proporciona una tabla de contenidos opcional.
-4. Escribe instrucciones específicas opcionales.
-5. Selecciona el número de capítulos deseado (máximo 50).
-6. Elige el idioma del libro.
-7. Decide si incluir introducción, conclusiones, nombre del autor y perfil del autor.
-8. Haz clic en "Generar Libro".
-9. Descarga el archivo generado.
-""")
-st.sidebar.markdown("""
----
-**📝 Corrección de texto en 24 horas**  
-👉 [Hablemos Bien](https://hablemosbien.org)
-""")
-
-# Validación de claves secretas
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("Por favor, configura la clave API en los secretos de Streamlit.")
-    st.stop()
-api_key = st.secrets["GOOGLE_API_KEY"]
+# Interfaz de usuario de Streamlit
+st.title("Generador de Novelas")
 
 # Entradas del usuario
-topic = st.text_input("📒 Tema del libro:")
-audience = st.text_input("🎯 Audiencia objetivo:")
-table_of_contents = st.text_area("📚 Tabla de contenidos opcional:", placeholder="Proporciona una tabla de contenidos para capítulos más largos.")
-specific_instructions = st.text_area("📝 Instrucciones específicas opcionales:", placeholder="Proporciona instrucciones específicas para el libro.")
-num_chapters = st.slider("🔢 Número de Capítulos", min_value=1, max_value=50, value=25)
-include_intro = st.checkbox("Incluir Introducción", value=True)
-include_conclusion = st.checkbox("Incluir Conclusiones", value=True)
-author_name = st.text_input("🖋️ Nombre del Autor (opcional):")
-author_bio = st.text_area("👤 Perfil del Autor (opcional):", placeholder="Descripción profesional breve o biografía.")
-languages = ["English", "Spanish", "French", "German", "Chinese", "Japanese", "Russian", "Portuguese", "Italian", "Arabic", "Medieval Latin", "Koine Greek"]
-selected_language = st.selectbox("🌐 Elige el idioma del libro:", languages)
+title = st.text_input("Título de la novela:")
+genre = st.selectbox("Género:", ["Ciencia Ficción", "Fantasía", "Romance", "Misterio", "Drama"])
+audience = st.selectbox("Audiencia:", ["Niños", "Adolescentes", "Adultos"])
+num_chapters = st.number_input("Número de capítulos:", min_value=1, max_value=50, value=5)
+instructions = st.text_area("Instrucciones especiales (opcional):", 
+                            placeholder="Ejemplo: Incluye un personaje misterioso que aparezca en cada capítulo.")
+author_name = st.text_input("Nombre del autor (opcional):")
+author_bio = st.text_area("Biografía del autor (opcional):", 
+                          placeholder="Escribe algo sobre el autor aquí...")
+language = st.selectbox("Idioma:", ["Español", "Inglés"])
 
-# Estado de Streamlit para almacenar los capítulos generados
-if 'chapters' not in st.session_state:
-    st.session_state.chapters = []
+# Botón para generar la novela
+if st.button("Generar Novela"):
+    if title and genre and audience and num_chapters:
+        st.write(f"Generando novela: **{title}** ({genre}, para {audience})...")
+        
+        novel_content = []
+        total_word_count = 0
+        
+        for chapter in range(1, int(num_chapters) + 1):
+            st.write(f"Generando capítulo {chapter}...")
+            
+            # Crear el prompt para el capítulo
+            prompt = (
+                f"Escribe el capítulo {chapter} de una novela titulada '{title}'. "
+                f"El género es {genre} y está dirigido a {audience}. "
+                f"{instructions if instructions else ''} "
+                f"Asegúrate de que el capítulo tenga una longitud adecuada y continúe la historia de forma coherente."
+            )
+            
+            # Generar el contenido del capítulo
+            chapter_content = generate_novel_content(prompt)
+            if chapter_content:
+                word_count = count_words(chapter_content)
+                total_word_count += word_count
+                novel_content.append((f"Capítulo {chapter}", chapter_content, word_count))
+        
+        # Mostrar la novela completa con menús retractables
+        st.subheader("Novela Completa")
+        for chapter_title, content, word_count in novel_content:
+            with st.expander(f"{chapter_title} ({word_count} palabras)"):
+                st.write(content)
+        
+        # Mostrar el total de palabras
+        st.write(f"**Total de palabras en la novela:** {total_word_count}")
 
-# Botón para generar el libro
-if st.button("🚀 Generar Libro"):
-    if not topic or not audience:
-        st.error("Por favor, introduce un tema y una audiencia objetivo válidos.")
-        st.stop()
-
-    chapters = []
-
-    # Generar introducción si está seleccionada
-    if include_intro:
-        st.write("⏳ Generando introducción...")
-        intro_content = generate_chapter(api_key, topic, audience, 0, selected_language.lower(), table_of_contents, specific_instructions, is_intro=True)
-        chapters.append(intro_content)
-        word_count = len(intro_content.split())
-        with st.expander(f"🌟 Introducción ({word_count} palabras)"):
-            st.write(intro_content)
-
-    # Generar capítulos principales
-    progress_bar = st.progress(0)
-    for i in range(1, num_chapters + 1):
-        st.write(f"⏳ Generando capítulo {i}...")
-        chapter_content = generate_chapter(api_key, topic, audience, i, selected_language.lower(), table_of_contents, specific_instructions)
-        word_count = len(chapter_content.split())
-        chapters.append(chapter_content)
-        with st.expander(f"📖 Capítulo {i} ({word_count} palabras)"):
-            st.write(chapter_content)
-        progress_bar.progress(i / num_chapters)
-
-    # Generar conclusiones si están seleccionadas
-    if include_conclusion:
-        st.write("⏳ Generando conclusiones...")
-        conclusion_content = generate_chapter(api_key, topic, audience, 0, selected_language.lower(), table_of_contents, specific_instructions, is_conclusion=True)
-        word_count = len(conclusion_content.split())
-        chapters.append(conclusion_content)
-        with st.expander(f"🔚 Conclusiones ({word_count} palabras)"):
-            st.write(conclusion_content)
-
-    st.session_state.chapters = chapters
-
-# Mostrar opciones de descarga si hay capítulos generados
-if st.session_state.chapters:
-    st.subheader("⬇️ Opciones de Descarga")
-    word_file = create_word_document(st.session_state.chapters, topic, author_name, author_bio, selected_language.lower())
-
-    st.download_button(
-        label="📥 Descargar en Word",
-        data=word_file.getvalue(),
-        file_name=f"{topic}.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+        # Crear y descargar el archivo Word
+        if novel_content:
+            chapters_text = [content for _, content, _ in novel_content]
+            word_buffer = create_word_document(
+                chapters=chapters_text,
+                title=title,
+                author_name=author_name,
+                author_bio=author_bio,
+                language=language.lower()
+            )
+            st.download_button(
+                label="Descargar Novela en Word",
+                data=word_buffer,
+                file_name=f"{title.replace(' ', '_')}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    else:
+        st.warning("Por favor, completa todos los campos.")
