@@ -7,7 +7,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from io import BytesIO
 
-# Función para llamar a la API de OpenRouter
+# Función para llamar a la API de Qwen Turbo
 def generate_novel_content(prompt):
     api_key = st.secrets["OPENROUTER_API_KEY"]
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -16,7 +16,7 @@ def generate_novel_content(prompt):
         "Authorization": f"Bearer {api_key}"
     }
     data = {
-        "model": "sophosympatheia/rogue-rose-103b-v0.2:free",
+        "model": "qwen/qwen-turbo",  # Cambio al modelo Qwen Turbo
         "messages": [
             {
                 "role": "user",
@@ -35,6 +35,14 @@ def generate_novel_content(prompt):
 def count_words(text):
     words = text.split()
     return len(words)
+
+# Función para reemplazar comillas por rayas en diálogos (solo para español)
+def replace_quotes_with_dashes(text, language="spanish"):
+    if language.lower() == "spanish":
+        # Reemplazar comillas dobles por rayas en diálogos
+        text = text.replace('“', '—').replace('”', '—')
+        text = text.replace('"', '—')
+    return text
 
 # Función para agregar numeración de páginas al documento Word
 def add_page_numbers(doc):
@@ -108,6 +116,8 @@ def create_word_document(chapters, title, author_name="", author_bio="", languag
         paragraphs = chapter.split('\n\n')
         for para_text in paragraphs:
             para_text = para_text.replace('\n', ' ').strip()
+            # Reemplazar comillas por rayas si el idioma es español
+            para_text = replace_quotes_with_dashes(para_text, language)
             paragraph = doc.add_paragraph(para_text)
             paragraph.style = "Normal"
             paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -188,6 +198,9 @@ if st.button("Generar Novela"):
             # Generar el contenido del capítulo
             chapter_content = generate_novel_content(prompt)
             if chapter_content:
+                # Reemplazar comillas por rayas si el idioma es español
+                chapter_content = replace_quotes_with_dashes(chapter_content, language)
+                
                 word_count = count_words(chapter_content)
                 total_word_count += word_count
                 novel_content.append((f"Capítulo {chapter}", chapter_content, word_count))
