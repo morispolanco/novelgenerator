@@ -142,6 +142,13 @@ title = st.text_input("Título de la novela:")
 genre = st.selectbox("Género:", ["Ciencia Ficción", "Fantasía", "Romance", "Misterio", "Drama"])
 audience = st.selectbox("Audiencia:", ["Niños", "Adolescentes", "Adultos"])
 num_chapters = st.number_input("Número de capítulos:", min_value=1, max_value=50, value=5)
+
+# Solicitar detalles de la trama
+st.subheader("Define la trama de tu novela")
+planteamiento = st.text_area("Planteamiento:", placeholder="Introduce el escenario y los personajes principales.")
+nudo = st.text_area("Nudo:", placeholder="Describe el conflicto o desafío central.")
+desenlace = st.text_area("Desenlace:", placeholder="Explica cómo se resuelve la historia.")
+
 instructions = st.text_area("Instrucciones especiales (opcional):", 
                             placeholder="Ejemplo: Incluye un personaje misterioso que aparezca en cada capítulo.")
 author_name = st.text_input("Nombre del autor (opcional):")
@@ -151,19 +158,26 @@ language = st.selectbox("Idioma:", ["Español", "Inglés"])
 
 # Botón para generar la novela
 if st.button("Generar Novela"):
-    if title and genre and audience and num_chapters:
+    if title and genre and audience and num_chapters and planteamiento and nudo and desenlace:
         st.write(f"Generando novela: **{title}** ({genre}, para {audience})...")
         
         novel_content = []
         total_word_count = 0
         
+        # Barra de progreso
+        progress_bar = st.progress(0)
+        status_text = st.empty()  # Para mostrar el estado actual
+        
         for chapter in range(1, int(num_chapters) + 1):
-            st.write(f"Generando capítulo {chapter}...")
+            status_text.text(f"Generando capítulo {chapter} de {num_chapters}...")
             
             # Crear el prompt para el capítulo
             prompt = (
                 f"Escribe el capítulo {chapter} de una novela titulada '{title}'. "
                 f"El género es {genre} y está dirigido a {audience}. "
+                f"La trama sigue este planteamiento: {planteamiento}. "
+                f"El nudo principal es: {nudo}. "
+                f"El desenlace será: {desenlace}. "
                 f"{instructions if instructions else ''} "
                 f"Asegúrate de que el capítulo tenga una longitud adecuada y continúe la historia de forma coherente."
             )
@@ -174,6 +188,12 @@ if st.button("Generar Novela"):
                 word_count = count_words(chapter_content)
                 total_word_count += word_count
                 novel_content.append((f"Capítulo {chapter}", chapter_content, word_count))
+            
+            # Actualizar la barra de progreso
+            progress = chapter / num_chapters
+            progress_bar.progress(progress)
+        
+        status_text.text("¡Novela generada con éxito!")
         
         # Mostrar la novela completa con menús retractables
         st.subheader("Novela Completa")
