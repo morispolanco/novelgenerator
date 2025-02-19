@@ -70,16 +70,13 @@ if st.button("Generar Novela"):
                 f"El nudo principal es: {nudo}. "
                 f"El desenlace será: {desenlace}. "
                 f"{instructions if instructions else ''} "
-                f"Asegúrate de que el capítulo tenga una longitud adecuada y continúe la historia de forma coherente. "
-                f"El capítulo debe tener al menos 1000 palabras."
+                f"Asegúrate de que el capítulo tenga una longitud adecuada y continúe la historia de forma coherente."
             )
             
             # Generar el contenido del capítulo
-            chapter_content = ""
-            while count_words(chapter_content) < 1000:  # Verificar que el capítulo tenga más de 1000 palabras
-                new_content = generate_novel_content(prompt)
-                if new_content:
-                    chapter_content += " " + new_content.strip()
+            chapter_content = generate_novel_content(prompt)
+            if chapter_content:
+                chapter_content = chapter_content.strip()
             
             # Reemplazar comillas por rayas si el idioma es español
             chapter_content = replace_quotes_with_dashes(chapter_content, language)
