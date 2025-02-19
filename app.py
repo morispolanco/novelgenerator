@@ -54,16 +54,17 @@ def format_title(title, language):
         return title.title()
 
 # Función para generar un capítulo usando OpenRouter AI
-def generate_chapter(api_key, title, plot, audience, genre, chapter_number, language, is_intro=False, is_conclusion=False):
+def generate_chapter(api_key, topic, audience, chapter_number, language, table_of_contents="", specific_instructions=""):
     url = "https://openrouter.ai/api/v1/chat/completions"
     
-    # Construir el mensaje según si es introducción, capítulo o conclusión
-    if is_intro:
-        message_content = f"Escribe una introducción detallada para la novela '{title}' con la trama '{plot}', dirigida a {audience}. El género es {genre}."
-    elif is_conclusion:
-        message_content = f"Escribe conclusiones exhaustivas para la novela '{title}' con la trama '{plot}', dirigida a {audience}. El género es {genre}."
-    else:
-        message_content = f"Escribe el capítulo {chapter_number} para la novela '{title}' con la trama '{plot}', dirigido a {audience}. El género es {genre}."
+    # Construir el mensaje con la tabla de contenido e instrucciones específicas
+    message_content = f"Escribe el capítulo {chapter_number} sobre {topic} dirigido a {audience}."
+    
+    if table_of_contents:
+        message_content += f" Sigue esta estructura: {table_of_contents}"
+    
+    if specific_instructions:
+        message_content += f" {specific_instructions}"
     
     headers = {
         "Content-Type": "application/json",
@@ -84,11 +85,8 @@ def generate_chapter(api_key, title, plot, audience, genre, chapter_number, lang
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
         content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "Error generating the chapter.")
-    except requests.exceptions.HTTPError as e:
-        st.error(f"Error HTTP: {e.response.status_code} - {e.response.text}")
-        return "Error al generar el capítulo."
-    except Exception as e:
-        st.error(f"Error desconocido: {str(e)}")
+    except requests.RequestException as e:
+        st.error(f"Error al generar el capítulo {chapter_number}: {str(e)}")
         return "Error al generar el capítulo."
     
     # Procesar diálogos y listas
@@ -186,78 +184,84 @@ def create_word_document(chapters, title, author_name, author_bio, language):
     return buffer
 
 # Configuración de Streamlit
-st.set_page_config(page_title="Novel Generator", page_icon="📚")
+st.set_page_config(page_title="Automatic Book Generator", page_icon="📚")
 
 # Título con ícono
-st.title("📚 Novel Generator")
+st.title("📚 Automatic Book Generator")
+
+# Barra lateral con instrucciones y anuncio
+st.sidebar.header("📖 ¿Cómo funciona esta aplicación?")
+st.sidebar.markdown("""
+Esta aplicación genera automáticamente libros en formato `.docx` basados en un tema y audiencia objetivo. 
+Los libros pueden ser **ficción** o **no-ficción**, dependiendo de tu entrada.
+
+**Pasos para usarla:**
+1. Introduce el tema del libro.
+2. Especifica la audiencia objetivo.
+3. Proporciona una tabla de contenidos opcional.
+4. Escribe instrucciones específicas opcionales.
+5. Selecciona el número de capítulos deseado (máximo 50).
+6. Elige el idioma del libro.
+7. Decide si incluir nombre del autor y perfil del autor.
+8. Haz clic en "Generar Libro".
+9. Descarga el archivo generado.
+""")
+st.sidebar.markdown("""
+---
+**📝 Corrección de texto en 24 horas**  
+👉 [Hablemos Bien](https://hablemosbien.org)
+""")
+
+# Validación de claves secretas
+if "OPENROUTER_API_KEY" not in st.secrets:
+    st.error("Por favor, configura la clave API en los secretos de Streamlit.")
+    st.stop()
+api_key = st.secrets["OPENROUTER_API_KEY"]
 
 # Entradas del usuario
-title = st.text_input("📒 Título de la novela:")
-plot = st.text_area("📖 Trama general:", placeholder="Describe brevemente la trama de la novela.")
+topic = st.text_input("📒 Tema del libro:")
 audience = st.text_input("🎯 Audiencia objetivo:")
-genres = ["Romance", "Ciencia Ficción", "Fantasía", "Misterio", "Thriller", "Drama", "Comedia", "Aventura", "Histórico", "Cyberpunk", "Steampunk", "Horror"]
-selected_genre = st.selectbox("🎭 Género/Subgénero:", genres)
-num_chapters = st.slider("🔢 Número de Capítulos", min_value=1, max_value=50, value=10)
+table_of_contents = st.text_area("📚 Tabla de contenidos opcional:", placeholder="Proporciona una tabla de contenidos para capítulos más largos.")
+specific_instructions = st.text_area("📝 Instrucciones específicas opcionales:", placeholder="Proporciona instrucciones específicas para el libro.")
+num_chapters = st.slider("🔢 Número de Capítulos", min_value=1, max_value=50, value=25)
 author_name = st.text_input("🖋️ Nombre del Autor (opcional):")
 author_bio = st.text_area("👤 Perfil del Autor (opcional):", placeholder="Descripción profesional breve o biografía.")
-languages = ["English", "Spanish", "French", "German", "Chinese", "Japanese", "Russian", "Portuguese", "Italian", "Arabic"]
-selected_language = st.selectbox("🌐 Elige el idioma de la novela:", languages)
+languages = ["English", "Spanish", "French", "German", "Chinese", "Japanese", "Russian", "Portuguese", "Italian", "Arabic", "Medieval Latin", "Koine Greek"]
+selected_language = st.selectbox("🌐 Elige el idioma del libro:", languages)
 
 # Estado de Streamlit para almacenar los capítulos generados
 if 'chapters' not in st.session_state:
     st.session_state.chapters = []
 
-# Botón para generar la novela
-if st.button("🚀 Generar Novela"):
-    if not title or not plot or not audience:
-        st.error("Por favor, introduce un título, una trama y una audiencia objetivo válidos.")
+# Botón para generar el libro
+if st.button("🚀 Generar Libro"):
+    if not topic or not audience:
+        st.error("Por favor, introduce un tema y una audiencia objetivo válidos.")
         st.stop()
 
     chapters = []
-
-    # Validación de claves secretas
-    if "OPENROUTER_API_KEY" not in st.secrets:
-        st.error("Por favor, configura la clave API en los secretos de Streamlit.")
-        st.stop()
-    api_key = st.secrets["OPENROUTER_API_KEY"]
-
-    # Generar introducción
-    st.write("⏳ Generando introducción...")
-    intro_content = generate_chapter(api_key, title, plot, audience, selected_genre, 0, selected_language.lower(), is_intro=True)
-    chapters.append(intro_content)
-    word_count = len(intro_content.split())
-    with st.expander(f"🌟 Introducción ({word_count} palabras)"):
-        st.write(intro_content)
 
     # Generar capítulos principales
     progress_bar = st.progress(0)
     for i in range(1, num_chapters + 1):
         st.write(f"⏳ Generando capítulo {i}...")
-        chapter_content = generate_chapter(api_key, title, plot, audience, selected_genre, i, selected_language.lower())
+        chapter_content = generate_chapter(api_key, topic, audience, i, selected_language.lower(), table_of_contents, specific_instructions)
         word_count = len(chapter_content.split())
         chapters.append(chapter_content)
         with st.expander(f"📖 Capítulo {i} ({word_count} palabras)"):
             st.write(chapter_content)
         progress_bar.progress(i / num_chapters)
 
-    # Generar conclusiones
-    st.write("⏳ Generando conclusiones...")
-    conclusion_content = generate_chapter(api_key, title, plot, audience, selected_genre, 0, selected_language.lower(), is_conclusion=True)
-    word_count = len(conclusion_content.split())
-    chapters.append(conclusion_content)
-    with st.expander(f"🔚 Conclusiones ({word_count} palabras)"):
-        st.write(conclusion_content)
-
     st.session_state.chapters = chapters
 
 # Mostrar opciones de descarga si hay capítulos generados
 if st.session_state.chapters:
     st.subheader("⬇️ Opciones de Descarga")
-    word_file = create_word_document(st.session_state.chapters, title, author_name, author_bio, selected_language.lower())
+    word_file = create_word_document(st.session_state.chapters, topic, author_name, author_bio, selected_language.lower())
 
     st.download_button(
         label="📥 Descargar en Word",
         data=word_file.getvalue(),
-        file_name=f"{title}.docx",
+        file_name=f"{topic}.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
