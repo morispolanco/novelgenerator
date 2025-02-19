@@ -157,10 +157,11 @@ genre = st.selectbox("Género:", [
     "Drama",
     "Terror",
     "Aventura",
-    "Histórico",
+    "Ficción histórica",
     "Comedia",
     "Thriller",
     "Distopía",
+    "Erótica",
     "Realismo Mágico"
 ])
 audience = st.selectbox("Audiencia:", ["Niños", "Adolescentes", "Adultos"])
