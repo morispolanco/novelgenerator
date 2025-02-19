@@ -121,7 +121,7 @@ def create_word_document(chapters, title, author_name="", author_bio="", languag
             paragraph = doc.add_paragraph(para_text)
             paragraph.style = "Normal"
             paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            paragraph.paragraph_format.space_after = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(6)  # Changed to 6 pt
             for run in paragraph.runs:
                 run.font.size = Pt(11)
                 run.font.name = "Times New Roman"
