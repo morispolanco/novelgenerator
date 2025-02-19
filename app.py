@@ -14,7 +14,7 @@ def clean_markdown(text):
     text = re.sub(r'[#*_`]', '', text)  # Eliminar caracteres especiales de Markdown
     return text.strip()
 
-# Función para procesar diálogos y listas, reemplazando guiones por rayas
+# Función para procesar listas y diálogos, reemplazando guiones por rayas
 def process_dialogues_and_lists(text):
     """
     Procesa el texto para:
@@ -53,12 +53,17 @@ def format_title(title, language):
     else:
         return title.title()
 
-# Función para generar un capítulo usando OpenRouter AI
-def generate_chapter(api_key, topic, audience, chapter_number, language, table_of_contents="", specific_instructions=""):
-    url = "https://openrouter.ai/api/v1/chat/completions"
+# Función para generar un capítulo usando Google Gemini
+def generate_chapter(api_key, topic, audience, chapter_number, language, table_of_contents="", specific_instructions="", is_intro=False, is_conclusion=False):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     
     # Construir el mensaje con la tabla de contenido e instrucciones específicas
-    message_content = f"Escribe el capítulo {chapter_number} sobre {topic} dirigido a {audience}."
+    if is_intro:
+        message_content = f"Escribe una introducción detallada sobre {topic} dirigida a {audience}."
+    elif is_conclusion:
+        message_content = f"Escribe conclusiones exhaustivas sobre {topic} dirigidas a {audience}."
+    else:
+        message_content = f"Escribe el capítulo {chapter_number} sobre {topic} dirigido a {audience}."
     
     if table_of_contents:
         message_content += f" Sigue esta estructura: {table_of_contents}"
@@ -66,25 +71,20 @@ def generate_chapter(api_key, topic, audience, chapter_number, language, table_o
     if specific_instructions:
         message_content += f" {specific_instructions}"
     
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-    
     data = {
-        "model": "sophosympatheia/rogue-rose-103b-v0.2:free",
-        "messages": [
-            {
-                "role": "user",
-                "content": message_content
-            }
-        ]
+        "contents": [{"role": "user", "parts": [{"text": message_content}]}],
+        "generationConfig": {
+            "temperature": 0.7,  # Ajuste para más coherencia y relevancia
+            "topK": 40,
+            "topP": 0.95,
+            "responseMimeType": "text/plain"
+        }
     }
     
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, json=data)
         response.raise_for_status()
-        content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "Error generating the chapter.")
+        content = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating the chapter.")
     except requests.RequestException as e:
         st.error(f"Error al generar el capítulo {chapter_number}: {str(e)}")
         return "Error al generar el capítulo."
@@ -202,7 +202,7 @@ Los libros pueden ser **ficción** o **no-ficción**, dependiendo de tu entrada.
 4. Escribe instrucciones específicas opcionales.
 5. Selecciona el número de capítulos deseado (máximo 50).
 6. Elige el idioma del libro.
-7. Decide si incluir nombre del autor y perfil del autor.
+7. Decide si incluir introducción, conclusiones, nombre del autor y perfil del autor.
 8. Haz clic en "Generar Libro".
 9. Descarga el archivo generado.
 """)
@@ -213,10 +213,10 @@ st.sidebar.markdown("""
 """)
 
 # Validación de claves secretas
-if "OPENROUTER_API_KEY" not in st.secrets:
+if "GOOGLE_API_KEY" not in st.secrets:
     st.error("Por favor, configura la clave API en los secretos de Streamlit.")
     st.stop()
-api_key = st.secrets["OPENROUTER_API_KEY"]
+api_key = st.secrets["GOOGLE_API_KEY"]
 
 # Entradas del usuario
 topic = st.text_input("📒 Tema del libro:")
@@ -224,6 +224,8 @@ audience = st.text_input("🎯 Audiencia objetivo:")
 table_of_contents = st.text_area("📚 Tabla de contenidos opcional:", placeholder="Proporciona una tabla de contenidos para capítulos más largos.")
 specific_instructions = st.text_area("📝 Instrucciones específicas opcionales:", placeholder="Proporciona instrucciones específicas para el libro.")
 num_chapters = st.slider("🔢 Número de Capítulos", min_value=1, max_value=50, value=25)
+include_intro = st.checkbox("Incluir Introducción", value=True)
+include_conclusion = st.checkbox("Incluir Conclusiones", value=True)
 author_name = st.text_input("🖋️ Nombre del Autor (opcional):")
 author_bio = st.text_area("👤 Perfil del Autor (opcional):", placeholder="Descripción profesional breve o biografía.")
 languages = ["English", "Spanish", "French", "German", "Chinese", "Japanese", "Russian", "Portuguese", "Italian", "Arabic", "Medieval Latin", "Koine Greek"]
@@ -241,6 +243,15 @@ if st.button("🚀 Generar Libro"):
 
     chapters = []
 
+    # Generar introducción si está seleccionada
+    if include_intro:
+        st.write("⏳ Generando introducción...")
+        intro_content = generate_chapter(api_key, topic, audience, 0, selected_language.lower(), table_of_contents, specific_instructions, is_intro=True)
+        chapters.append(intro_content)
+        word_count = len(intro_content.split())
+        with st.expander(f"🌟 Introducción ({word_count} palabras)"):
+            st.write(intro_content)
+
     # Generar capítulos principales
     progress_bar = st.progress(0)
     for i in range(1, num_chapters + 1):
@@ -251,6 +262,15 @@ if st.button("🚀 Generar Libro"):
         with st.expander(f"📖 Capítulo {i} ({word_count} palabras)"):
             st.write(chapter_content)
         progress_bar.progress(i / num_chapters)
+
+    # Generar conclusiones si están seleccionadas
+    if include_conclusion:
+        st.write("⏳ Generando conclusiones...")
+        conclusion_content = generate_chapter(api_key, topic, audience, 0, selected_language.lower(), table_of_contents, specific_instructions, is_conclusion=True)
+        word_count = len(conclusion_content.split())
+        chapters.append(conclusion_content)
+        with st.expander(f"🔚 Conclusiones ({word_count} palabras)"):
+            st.write(conclusion_content)
 
     st.session_state.chapters = chapters
 
